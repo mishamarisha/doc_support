@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Мои обновления{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <h1 class="h2 fw-semibold">
+            <i class="bi bi-database-fill-down text-primary me-2"></i> Импортированные изменения
+        </h1>
+        <form method="post" class="m-0">
+            {% csrf_token %}
+            <button type="submit" name="import_changes" value="1" class="btn btn-primary rounded-pill px-4">
+                <i class="bi bi-cloud-arrow-up me-2"></i>Загрузить из чейнджлога
+            </button>
+        </form>
+    </div>
+
+    <!-- Блок фильтров и поиска -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label for="source" class="form-label fw-semibold">Источник</label>
+                    <select name="source" id="source" class="form-select rounded-pill">
+                        <option value="">Все</option>
+                        <option value="prod" {% if source_filter == 'prod' %}selected{% endif %}>Production</option>
+                        <option value="dev" {% if source_filter == 'dev' %}selected{% endif %}>Development</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label for="q" class="form-label fw-semibold">Поиск по тексту</label>
+                    <div class="input-group">
+                        <input type="text" name="q" id="q" class="form-control rounded-pill-start" value="{{ search_query }}" placeholder="Ключевые слова...">
+                        <button type="submit" class="btn btn-outline-primary rounded-pill-end">
+                            <i class="bi bi-search"></i> Найти
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label for="order_by" class="form-label fw-semibold">Сортировка</label>
+                    <select name="order_by" id="order_by" class="form-select rounded-pill">
+                        <option value="-date" {% if current_order == '-date' %}selected{% endif %}>Сначала новые</option>
+                        <option value="date" {% if current_order == 'date' %}selected{% endif %}>Сначала старые</option>
+                        <option value="-source" {% if current_order == '-source' %}selected{% endif %}>По источнику (Я→А)</option>
+                        <option value="source" {% if current_order == 'source' %}selected{% endif %}>По источнику (А→Я)</option>
+                        <option value="-imported_at" {% if current_order == '-imported_at' %}selected{% endif %}>Сначала импортированные</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <a href="{% url 'imported_changes_list' %}" class="btn btn-secondary rounded-pill w-100">
+                        <i class="bi bi-arrow-repeat me-1"></i> Сбросить
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Таблица с данными -->
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Источник</th>
+                        <th>Дата изменения</th>
+                        <th>Текст</th>
+                        <th>Хеш (SHA256)</th>
+                        <th>Статус</th>
+                        <th>Импортировано</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for change in page_obj %}
+                    <tr>
+                        <td>
+                            {% if change.source == 'prod' %}
+                                <span class="badge bg-primary rounded-pill">Prod</span>
+                            {% else %}
+                                <span class="badge bg-info text-dark rounded-pill">Dev</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">{{ change.date|date:"d.m.Y" }}</td>
+                        <td>{{ change.text|truncatechars:120 }}</td>
+                        <td><code class="small text-muted">{{ change.hash|slice:":10" }}...</code></td>
+                        <td>
+                            {% if change.is_processed %}
+                                <span class="badge bg-success rounded-pill"><i class="bi bi-check-circle"></i> Обработано</span>
+                            {% else %}
+                                <span class="badge bg-secondary rounded-pill"><i class="bi bi-hourglass-split"></i> Не обработано</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap small">{{ change.imported_at|date:"d.m.Y H:i" }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-success rounded-pill me-1"
+                                        data-bs-toggle="modal" data-bs-target="#markModal{{ change.id }}"
+                                        title="Отметить обработанным" {% if change.is_processed %}disabled{% endif %}>
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger rounded-pill"
+                                        data-bs-toggle="modal" data-bs-target="#deleteModal{{ change.id }}"
+                                        title="Удалить">
+                                    <i class="bi bi-trash3"></i>
+                                </button>
+                            </div>
+
+                            <!-- Модальное окно для отметки обработанным -->
+                            <div class="modal fade" id="markModal{{ change.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Подтверждение</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            Отметить изменение «{{ change.text|truncatechars:60 }}» как обработанное?
+                                        </div>
+                                        <div class="modal-footer">
+                                            <form method="post">
+                                                {% csrf_token %}
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                                <button type="submit" class="btn btn-success">Да, отметить</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Модальное окно для удаления -->
+                            <div class="modal fade" id="deleteModal{{ change.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Удаление записи</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            Вы уверены, что хотите удалить изменение «{{ change.text|truncatechars:60 }}»?<br>
+                                            Это действие необратимо.
+                                        </div>
+                                        <div class="modal-footer">
+                                            <form method="post">
+                                                {% csrf_token %}
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                                <button type="submit" class="btn btn-danger">Удалить</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            Нет импортированных изменений. Нажмите «Загрузить из чейнджлога», чтобы добавить.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Пагинация -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="mt-4 d-flex justify-content-center">
+        <ul class="pagination">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link rounded-start-pill" href="?page=1{% if source_filter %}&source={{ source_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if current_order %}&order_by={{ current_order }}{% endif %}">
+                        &laquo; Первая
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if current_order %}&order_by={{ current_order }}{% endif %}">
+                        Назад
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link rounded-start-pill">&laquo; Первая</span></li>
+                <li class="page-item disabled"><span class="page-link">Назад</span></li>
+            {% endif %}
+
+            <li class="page-item active">
+                <span class="page-link">
+                    Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}
+                </span>
+            </li>
+
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if current_order %}&order_by={{ current_order }}{% endif %}">
+                        Вперёд
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link rounded-end-pill" href="?page={{ page_obj.paginator.num_pages }}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if current_order %}&order_by={{ current_order }}{% endif %}">
+                        Последняя &raquo;
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">Вперёд</span></li>
+                <li class="page-item disabled"><span class="page-link rounded-end-pill">Последняя &raquo;</span></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Блок для вывода сообщений (успех/ошибка) из django.contrib.messages -->
+{% if messages %}
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1050">
+    {% for message in messages %}
+    <div class="toast align-items-center text-white bg-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} border-0 show" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
+        <div class="d-flex">
+            <div class="toast-body">
+                {{ message }}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<script>
+    var toastElements = document.querySelectorAll('.toast');
+    toastElements.forEach(function(toastEl) {
+        var toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+        toast.show();
+    });
+</script>
+{% endif %}
+{% endblock %}

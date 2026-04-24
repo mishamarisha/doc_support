@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}DocTrack — Отслеживание изменений для техписателей{% endblock %}
+
+{% block content %}
+
+{% if message %}
+<div class="container mt-3">
+    <div class="alert alert-dismissible fade show
+        {% if 'ошибка' in message.lower or 'Error' in message %}alert-danger{% else %}alert-success{% endif %}"
+        role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+    </div>
+</div>
+{% endif %}
+
+<div class="min-vh-100 d-flex justify-content-center align-items-center">
+    <form method="post" class="text-center">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary btn-lg rounded-pill px-5 py-3 shadow-sm">
+            <i class="bi bi-cloud-arrow-up me-2"></i> Загрузить обновления
+        </button>
+    </form>
+</div>
+{% endblock %}

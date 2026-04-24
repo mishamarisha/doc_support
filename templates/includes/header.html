@@ -1,0 +1,35 @@
+<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="/">
+            <i class="bi bi-file-diff-fill text-primary"></i> DocTrack
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarMain">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item"><a class="nav-link active" href="/">Главная</a></li>
+                {% if user.is_authenticated %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'imported_changes_list' %}">Мои обновления</a></li>
+                {% endif %}
+            </ul>
+            <div class="d-flex">
+                {% if user.is_authenticated %}
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ user.username }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="">Профиль</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="">Выйти</a></li>
+                        </ul>
+                    </div>
+                {% else %}
+                    <a href="" class="btn btn-outline-primary me-2">Войти</a>
+                    <a href="" class="btn btn-primary">Регистрация</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</nav>
